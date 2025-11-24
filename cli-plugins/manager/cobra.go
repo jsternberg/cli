@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/docker/cli/cli-plugins/metadata"
-	"github.com/docker/cli/cli/config"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +14,7 @@ var pluginCommandStubsOnce sync.Once
 // AddPluginCommandStubs adds a stub cobra.Commands for each valid and invalid
 // plugin. The command stubs will have several annotations added, see
 // `CommandAnnotationPlugin*`.
-func AddPluginCommandStubs(dockerCLI config.Provider, rootCmd *cobra.Command) (err error) {
+func AddPluginCommandStubs(dockerCLI DockerCli, rootCmd *cobra.Command) (err error) {
 	pluginCommandStubsOnce.Do(func() {
 		var plugins []Plugin
 		plugins, err = ListPlugins(dockerCLI, rootCmd)

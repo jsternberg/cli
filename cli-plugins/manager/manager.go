@@ -17,6 +17,7 @@ import (
 	"github.com/docker/cli/cli/debug"
 	"github.com/fvbommel/sortorder"
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel/sdk/resource"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -171,10 +172,17 @@ func ListPlugins(dockerCli config.Provider, rootcmd *cobra.Command) ([]Plugin, e
 	return plugins, nil
 }
 
+// DockerCli is a simplified version of the command.Cli interface intended
+// for PluginRunCommand.
+type DockerCli interface {
+	config.Provider
+	Resource() *resource.Resource
+}
+
 // PluginRunCommand returns an [os/exec.Cmd] which when [os/exec.Cmd.Run] will execute the named plugin.
 // The rootcmd argument is referenced to determine the set of builtin commands in order to detect conficts.
 // The error returned satisfies the [errdefs.IsNotFound] predicate if no plugin was found or if the first candidate plugin was invalid somehow.
-func PluginRunCommand(dockerCli config.Provider, name string, rootcmd *cobra.Command) (*exec.Cmd, error) {
+func PluginRunCommand(dockerCli DockerCli, name string, rootcmd *cobra.Command) (*exec.Cmd, error) {
 	// This uses the full original args, not the args which may
 	// have been provided by cobra to our caller. This is because
 	// they lack e.g. global options which we must propagate here.
@@ -219,7 +227,7 @@ func PluginRunCommand(dockerCli config.Provider, name string, rootcmd *cobra.Com
 		cmd.Stderr = os.Stderr
 
 		cmd.Env = append(cmd.Environ(), metadata.ReexecEnvvar+"="+os.Args[0])
-		cmd.Env = appendPluginResourceAttributesEnvvar(cmd.Env, rootcmd, plugin)
+		cmd.Env = appendPluginResourceAttributesEnvvar(cmd.Env, rootcmd, plugin, dockerCli.Resource())
 
 		return cmd, nil
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	otelsdk "go.opentelemetry.io/otel/sdk"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -53,7 +54,7 @@ type TelemetryClient interface {
 }
 
 func (cli *DockerCli) Resource() *resource.Resource {
-	return cli.res.Get()
+	return cli.res.Get(cli)
 }
 
 func (*DockerCli) TracerProvider() trace.TracerProvider {
@@ -91,18 +92,20 @@ func (r *telemetryResource) Set(res *resource.Resource) {
 	r.res = res
 }
 
-func (r *telemetryResource) Get() *resource.Resource {
-	r.once.Do(r.init)
+func (r *telemetryResource) Get(cli *DockerCli) *resource.Resource {
+	r.once.Do(func() {
+		r.init(cli)
+	})
 	return r.res
 }
 
-func (r *telemetryResource) init() {
+func (r *telemetryResource) init(cli *DockerCli) {
 	if r.res != nil {
 		r.opts = nil
 		return
 	}
 
-	opts := append(defaultResourceOptions(), r.opts...)
+	opts := append(defaultResourceOptions(cli), r.opts...)
 	res, err := resource.New(context.Background(), opts...)
 	if err != nil {
 		otel.Handle(err)
@@ -136,10 +139,11 @@ func (cli *DockerCli) createGlobalTracerProvider(ctx context.Context, opts ...sd
 	otel.SetTracerProvider(tp)
 }
 
-func defaultResourceOptions() []resource.Option {
+func defaultResourceOptions(cli *DockerCli) []resource.Option {
 	return []resource.Option{
 		resource.WithDetectors(serviceNameDetector{}),
 		resource.WithAttributes(
+			CurrentContext.String(cli.CurrentContext()),
 			// Use a unique instance id so OTEL knows that each invocation
 			// of the CLI is its own instance. Without this, downstream
 			// OTEL processors may think the same process is restarting
@@ -277,3 +281,7 @@ func filterResourceAttributes(s string) string {
 	}
 	return strings.Join(elems, ",")
 }
+
+const (
+	CurrentContext = attribute.Key(dockerCLIAttributePrefix + "current_context")
+)
